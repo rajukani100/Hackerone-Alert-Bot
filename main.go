@@ -27,10 +27,6 @@ type BBP struct {
 	Last_updated_at time.Time `json:"last_updated_at"`
 }
 
-type BBP_LiST struct {
-	List []string
-}
-
 func getTotalCount() (int, error) {
 	reqBody := `
 {
@@ -154,8 +150,6 @@ func fetchProgram(from int, wg *sync.WaitGroup, c chan BBP) {
 }
 
 func main() {
-	var totalCount int
-	updatedBBP := make(chan string, 10)
 
 	totalCount, err := getTotalCount() // fetch total BBP program count
 	if err != nil {
@@ -175,23 +169,15 @@ func main() {
 
 	collCount, _ := client.Database("hackeroneDB").Collection("BBP").CountDocuments(context.Background(), bson.M{}) // number of document exist in db
 
-	ch := make(chan BBP, totalCount)
-
-	var wg sync.WaitGroup
-
-	for i := range int(page) {
-		wg.Add(1)
-		go fetchProgram(i*24, &wg, ch)
-	}
-
 	if collCount == 0 {
-		var dbWg sync.WaitGroup
-		dbWg.Add(1)
+		bbpChan := make(chan BBP, 10)
 
+		var insertWg sync.WaitGroup
+		insertWg.Add(1)
 		// save to db
 		go func() {
-			defer dbWg.Done()
-			for bbp := range ch {
+			defer insertWg.Done()
+			for bbp := range bbpChan {
 				_, err := client.Database("hackeroneDB").Collection("BBP").InsertOne(context.Background(), bbp)
 				if err != nil {
 					fmt.Println(err)
@@ -199,73 +185,97 @@ func main() {
 			}
 		}()
 
-		wg.Wait()
-		close(ch)
-		dbWg.Wait()
-		return
-
-	} else {
-		// check fetched program with stored program in db
-		for range 2 {
-			go func() {
-				for bbp := range ch {
-					var tmp BBP // reference to program stored in db
-					singleResult := client.Database("hackeroneDB").Collection("BBP").FindOne(context.Background(), bson.D{{Key: "handle", Value: bbp.Handle}})
-
-					if singleResult.Err() == mongo.ErrNoDocuments {
-						// program not exist in db, means new program is added
-						updatedBBP <- bbp.Handle
-						_, err := client.Database("hackeroneDB").Collection("BBP").InsertOne(context.Background(), bbp)
-						if err != nil {
-							fmt.Println(err)
-						}
-						continue
-					}
-
-					err = singleResult.Decode(&tmp)
-					if err != nil {
-						fmt.Print(err)
-						continue
-					}
-
-					//compare saved bbp with fetched bbp
-					switch tmp.Last_updated_at.Compare(bbp.Last_updated_at) {
-					case -1:
-						updatedBBP <- tmp.Handle
-
-						_, err := client.Database("hackeroneDB").Collection("BBP").ReplaceOne(context.Background(), bson.D{{Key: "handle", Value: tmp.Handle}}, bbp)
-						if err != nil {
-							fmt.Println(err)
-						}
-
-					}
-				}
-			}()
-
+		var fetchWg sync.WaitGroup
+		for i := 0; i < int(page); i++ {
+			fetchWg.Add(1)
+			go fetchProgram(i*24, &fetchWg, bbpChan)
 		}
-		wg.Wait()
-		close(ch)
-		close(updatedBBP)
+
+		go func() {
+			fetchWg.Wait()
+			close(bbpChan)
+		}()
+
+		insertWg.Wait()
+		fmt.Println("Done...")
+		return
+	}
+
+	updatedBBPchan := make(chan string, 10)
+	bbpChan := make(chan BBP, 10)
+
+	var fetchWg sync.WaitGroup
+	for i := 0; i < int(page); i++ {
+		fetchWg.Add(1)
+		go fetchProgram(i*24, &fetchWg, bbpChan)
+	}
+
+	go func() {
+		fetchWg.Wait()
+		close(bbpChan)
+	}()
+
+	var insertWg sync.WaitGroup
+	insertWg.Add(2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			for bbp := range bbpChan {
+				var tmp BBP // reference to program stored in db
+				singleResult := client.Database("hackeroneDB").Collection("BBP").FindOne(context.Background(), bson.D{{Key: "handle", Value: bbp.Handle}})
+
+				if singleResult.Err() == mongo.ErrNoDocuments {
+					// program not exist in db, means new program is added
+					updatedBBPchan <- bbp.Handle
+					_, err := client.Database("hackeroneDB").Collection("BBP").InsertOne(context.Background(), bbp)
+					if err != nil {
+						fmt.Println(err)
+					}
+					continue
+				}
+
+				err = singleResult.Decode(&tmp)
+				if err != nil {
+					fmt.Print(err)
+					continue
+				}
+
+				//compare saved bbp with fetched bbp
+				switch tmp.Last_updated_at.Compare(bbp.Last_updated_at) {
+				case -1:
+					updatedBBPchan <- tmp.Handle
+
+					_, err := client.Database("hackeroneDB").Collection("BBP").ReplaceOne(context.Background(), bson.D{{Key: "handle", Value: tmp.Handle}}, bbp)
+					if err != nil {
+						fmt.Println(err)
+					}
+
+				}
+			}
+			defer insertWg.Done()
+		}()
 
 	}
 
+	insertWg.Wait()
+	close(updatedBBPchan)
+
 	//recive all program from channel and put into slice
 	var bbpList []string
-
+	var wg sync.WaitGroup
 	wg.Add(1)
+
 	go func(wg *sync.WaitGroup) {
-		for bbp := range updatedBBP {
+		for bbp := range updatedBBPchan {
 			fmt.Println("Updated BBP: ", bbp)
 			bbpList = append(bbpList, bbp)
 
 		}
-		wg.Done()
+		defer wg.Done()
 	}(&wg)
 	wg.Wait()
 
 	if len(bbpList) > 0 {
 		sendEmail(bbpList)
 	}
-
-	fmt.Print("Done.")
+	fmt.Println("Done...")
 }
