@@ -1,0 +1,38 @@
+{
+    "operationName": "DiscoveryQuery",
+    "variables": {
+        "size": 464,
+        "from": 0,
+        "query": {},
+        "filter": {
+            "bool": {
+                "filter": [
+                    {
+                        "bool": {
+                            "must_not": {
+                                "term": {
+                                    "team_type": "Engagements::Assessment"
+                                }
+                            }
+                        }
+                    },
+                    null
+                ]
+            }
+        },
+        "sort": [
+            {
+                "field": "launched_at",
+                "direction": "DESC"
+            }
+        ],
+        "post_filters": {
+            "my_programs": false,
+            "bookmarked": false,
+            "campaign_teams": false
+        },
+        "product_area": "opportunity_discovery",
+        "product_feature": "search"
+    },
+    "query": "query DiscoveryQuery($query: OpportunitiesQuery!, $filter: QueryInput!, $from: Int, $size: Int, $sort: [SortInput!], $post_filters: OpportunitiesFilterInput) {\n  me {\n    id\n    ...OpportunityListMe\n    __typename\n  }\n  opportunities_search(\n    query: $query\n    filter: $filter\n    from: $from\n    size: $size\n    sort: $sort\n    post_filters: $post_filters\n  ) {\n    nodes {\n      ... on OpportunityDocument {\n        id\n        handle\n        state\n        __typename\n      }\n      ...OpportunityList\n      __typename\n    }\n    total_count\n    __typename\n  }\n}\n\nfragment OpportunityListMe on User {\n  id\n  ...OpportunityCardMe\n  __typename\n}\n\nfragment OpportunityCardMe on User {\n  id\n  ...BookmarkMe\n  ...PrivateOpportunitiesMe\n  __typename\n}\n\nfragment BookmarkMe on User {\n  id\n  __typename\n}\n\nfragment PrivateOpportunitiesMe on User {\n  id\n  whitelisted_teams {\n    edges {\n      node {\n        id\n        _id\n        __typename\n      }\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment OpportunityList on OpportunityDocument {\n  id\n  ...OpportunityCard\n  __typename\n}\n\nfragment OpportunityCard on OpportunityDocument {\n  id\n  team_id\n  name\n  handle\n  triage_active\n  publicly_visible_retesting\n  allows_private_disclosure\n  allows_bounty_splitting\n  launched_at\n  state\n  offers_bounties\n  last_updated_at\n  currency\n  team_type\n  minimum_bounty_table_value\n  maximum_bounty_table_value\n  cached_response_efficiency_percentage\n  first_response_time\n  structured_scope_stats\n  show_response_efficiency_indicator\n  submission_state\n  resolved_report_count\n  campaign {\n    id\n    campaign_type\n    start_date\n    end_date\n    critical\n    target_audience\n    __typename\n  }\n  gold_standard\n  awarded_report_count\n  awarded_reporter_count\n  h1_clear\n  idv\n  list_opportunity\n  __typename\n}\n"
+}

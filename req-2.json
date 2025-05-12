@@ -1,0 +1,20 @@
+{
+    "operationName": "PolicySearchStructuredScopesQuery",
+    "variables": {
+        "handle": "netflix",
+        "searchString": "",
+        "eligibleForSubmission": null,
+        "eligibleForBounty": null,
+        "asmTagIds": [],
+        "assetTypes": [],
+        "from": 0,
+        "size": 100,
+        "sort": {
+            "field": "cvss_score",
+            "direction": "DESC"
+        },
+        "product_area": "h1_assets",
+        "product_feature": "policy_scopes"
+    },
+    "query": "query PolicySearchStructuredScopesQuery($handle: String!, $searchString: String, $eligibleForSubmission: Boolean, $eligibleForBounty: Boolean, $minSeverityScore: SeverityRatingEnum, $asmTagIds: [Int], $assetTypes: [StructuredScopeAssetTypeEnum!], $from: Int, $size: Int, $sort: SortInput) {\n  team(handle: $handle) {\n    id\n    team_display_options {\n      show_total_reports_per_asset\n      __typename\n    }\n    structured_scopes_search(\n      search_string: $searchString\n      eligible_for_submission: $eligibleForSubmission\n      eligible_for_bounty: $eligibleForBounty\n      min_severity_score: $minSeverityScore\n      asm_tag_ids: $asmTagIds\n      asset_types: $assetTypes\n      from: $from\n      size: $size\n      sort: $sort\n    ) {\n      nodes {\n        ... on StructuredScopeDocument {\n          id\n          ...PolicyScopeStructuredScopeDocument\n          __typename\n        }\n        __typename\n      }\n      pageInfo {\n        startCursor\n        hasPreviousPage\n        endCursor\n        hasNextPage\n        __typename\n      }\n      total_count\n      __typename\n    }\n    __typename\n  }\n}\n\nfragment PolicyScopeStructuredScopeDocument on StructuredScopeDocument {\n  id\n  identifier\n  display_name\n  instruction\n  cvss_score\n  eligible_for_bounty\n  eligible_for_submission\n  asm_system_tags\n  created_at\n  updated_at\n  total_resolved_reports\n  attachments {\n    id\n    file_name\n    file_size\n    content_type\n    expiring_url\n    __typename\n  }\n  __typename\n}\n"
+}
